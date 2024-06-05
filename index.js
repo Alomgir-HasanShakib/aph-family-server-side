@@ -32,10 +32,22 @@ async function run() {
 
     //  all collection is here
     const userCollection = client.db("aph_family").collection("users");
+    const petCollection = client.db("aph_family").collection("pets");
 
     app.post("/users", async (req, res) => {
       const user = req.body;
+      const query = { email: user.email };
+      const existingUser = await userCollection.findOne(query);
+      if (existingUser) {
+        return res.send({ message: "User Already Exist", insertedId: null });
+      }
       const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
+
+    app.post("/pets", async (req, res) => {
+      const pet = req.body;
+      const result = await petCollection.insertOne(pet);
       res.send(result);
     });
 
