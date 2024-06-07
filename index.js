@@ -7,14 +7,14 @@ require("dotenv").config();
 // const stripe = require("stripe")(process.env.PAYMENT_KEY);
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: ["http://localhost:5173", "http://192.168.0.106:5173"],
     credentials: true,
   })
 );
 
 app.use(express.json());
 
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.MONGODB_USER}:${process.env.MONGODB_PASS}@cluster0.mmdewqm.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -48,6 +48,70 @@ async function run() {
     app.post("/pets", async (req, res) => {
       const pet = req.body;
       const result = await petCollection.insertOne(pet);
+      res.send(result);
+    });
+    // get all the pets  here
+    app.get("/pets", async (req, res) => {
+      const email = req.query.email;
+      const query = { user: email };
+      console.log(query);
+      const result = await petCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    // for showing single data info. if i can't do this so im not able to show single data info
+    app.get("/pets/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+
+      const result = await petCollection.findOne(query);
+      res.send(result);
+    });
+
+    //  update pet status
+    app.put("/pets/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updatePetStatus = req.body;
+      const item = {
+        $set: {
+          adopted: updatePetStatus.adopted,
+        },
+      };
+      const result = await petCollection.updateOne(filter, item, options);
+      res.send(result);
+    });
+
+
+
+     //  update pet information
+     app.patch("/pets/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updatedPet = req.body;
+      const item = {
+        $set: {
+          name: updatedPet.name,
+          age: updatedPet.age,
+          locaiton: updatedPet.locaiton,
+          category: updatedPet.category,
+          shortDescription: updatedPet.shortDescription,
+          long: updatedPet.long,
+          image: updatedPet.image,
+        },
+      };
+      const result = await petCollection.updateOne(filter, item, options);
+      res.send(result);
+    });
+
+
+    // delete pets from database
+    app.delete("/pets/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await petCollection.deleteOne(query);
       res.send(result);
     });
 
