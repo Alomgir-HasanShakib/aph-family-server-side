@@ -30,9 +30,44 @@ async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
 
-    //  all collection is here
+    // ====================================jwt api =========================================
+
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.JWT_TOKEN, {
+        expiresIn: "1h",
+      });
+      console.log(token);
+      res.send({ token });
+    });
+
+    // ==========================middleware ======================
+    const verifytoken = (req, res, next) => {
+      if (!req.headers.authorization) {
+        return res.status(401).send({
+          message: "Forbidden Access",
+        });
+      }
+      const token = req.headers.authorization.split(" ")[1];
+      console.log("token is here", token);
+      jwt.verify(token, process.env.JWT_TOKEN, (err, decoded) => {
+        if (err) {
+          return res.status(401).send({ message: "Forbidden access" });
+        }
+        req.decoded = decoded;
+
+        next();
+      });
+    };
+
+    //  ========================================================all collection is here=========================================
+
     const userCollection = client.db("aph_family").collection("users");
     const petCollection = client.db("aph_family").collection("pets");
+    const campaignCollection = client.db("aph_family").collection("campaigns");
+    const adoptRequestCollection = client
+      .db("aph_family")
+      .collection("adoptRequests");
 
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -45,31 +80,35 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/pets", async (req, res) => {
+    app.post("/pets", verifytoken, async (req, res) => {
       const pet = req.body;
       const result = await petCollection.insertOne(pet);
       res.send(result);
     });
-    // get all the pets  here
+    // ============================================get all the pets  here=========================================
+
     app.get("/pets", async (req, res) => {
-      const email = req.query.email;
-      const query = { user: email };
-      console.log(query);
-      const result = await petCollection.find(query).toArray();
+      const result = await petCollection.find().sort({ date: -1 }).toArray();
       res.send(result);
     });
 
-    // for showing single data info. if i can't do this so im not able to show single data info
+    //====================== for showing single data info. if i can't do this so im not able to show single data info=================
     app.get("/pets/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
-
       const result = await petCollection.findOne(query);
       res.send(result);
     });
 
-    //  update pet status
-    app.put("/pets/:id", async (req, res) => {
+    app.get("/campaigns/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await campaignCollection.findOne(query);
+      res.send(result);
+    });
+
+    //  =========================================================update pet status====================================
+    app.put("/pets/:id", verifytoken, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
@@ -83,10 +122,9 @@ async function run() {
       res.send(result);
     });
 
+    //  =============================================update pet information=============================================
 
-
-     //  update pet information
-     app.patch("/pets/:id", async (req, res) => {
+    app.patch("/pets/:id", verifytoken, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
@@ -106,12 +144,65 @@ async function run() {
       res.send(result);
     });
 
-
     // delete pets from database
-    app.delete("/pets/:id", async (req, res) => {
+    app.delete("/pets/:id", verifytoken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await petCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    // ==============================================adopt request collection here=========================================
+
+    app.post("/adoptRequest", verifytoken, async (req, res) => {
+      const pet = req.body;
+      const result = await adoptRequestCollection.insertOne(pet);
+      res.send(result);
+    });
+
+    // ================================================campaign api here =========================================================
+
+    app.post("/campaigns", verifytoken, async (req, res) => {
+      const campaignData = req.body;
+      const result = await campaignCollection.insertOne(campaignData);
+      res.send(result);
+    });
+    app.get("/campaigns", verifytoken, async (req, res) => {
+      const result = await campaignCollection.find().toArray();
+      res.send(result);
+    });
+    //  ============================================= updatedIsPause variable=============================================
+
+    app.patch("/campaigns/:id", verifytoken, async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updatedIsPause = req.body;
+      const item = {
+        $set: {
+          isPause: updatedIsPause.isPause,
+        },
+      };
+      const result = await campaignCollection.updateOne(filter, item, options);
+      res.send(result);
+    });
+
+    app.put("/campaigns/:id", verifytoken, async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updatedInfo = req.body;
+      const item = {
+        $set: {
+          petName: updatedInfo.petName,
+          totalAmount: updatedInfo.totalAmount,
+          lastDate: updatedInfo.lastDate,
+          image: updatedInfo.image,
+          shortDescription: updatedInfo.shortDescription,
+          longDescription: updatedInfo.longDescription,
+        },
+      };
+      const result = await campaignCollection.updateOne(filter, item, options);
       res.send(result);
     });
 
