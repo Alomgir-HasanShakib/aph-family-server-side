@@ -60,6 +60,19 @@ async function run() {
       });
     };
 
+    // use verifyAdmin after verifyToken
+
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      const isAdmin = user?.role === "admin";
+      if (!isAdmin) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      next();
+    };
+
     //  ========================================================all collection is here=========================================
 
     const userCollection = client.db("aph_family").collection("users");
@@ -81,6 +94,52 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/users", verifytoken, verifyAdmin, async (req, res) => {
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    });
+
+    // get admin  from database
+    app.get("/users/admin/:email", verifytoken, async (req, res) => {
+      const email = req.params.email;
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "UnAuthorize Access" });
+      }
+      const query = { email: email };
+      console.log(query);
+      const user = await userCollection.findOne(query);
+      let admin = false;
+      if (user) {
+        admin = user?.role === "admin";
+      }
+      res.send({ admin });
+    });
+
+    // delete user from database
+    app.delete("/users/:id", verifytoken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await userCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    // ====================================make user to admin ===============================
+    app.patch(
+      "/users/admin/:id",
+      verifytoken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const filter = { _id: new ObjectId(id) };
+        const updatedDoc = {
+          $set: { role: "admin" },
+        };
+        const result = await userCollection.updateOne(filter, updatedDoc);
+        res.send(result);
+      }
+    );
+
+    // =============================================post pets to the database ========================================
     app.post("/pets", verifytoken, async (req, res) => {
       const pet = req.body;
       const result = await petCollection.insertOne(pet);
@@ -206,6 +265,13 @@ async function run() {
         .find()
         .sort({ lastDate: -1 })
         .toArray();
+      res.send(result);
+    });
+    // delete campaigns from database
+    app.delete("/campaigns/:id", verifytoken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await campaignCollection.deleteOne(query);
       res.send(result);
     });
     //  ============================================= updatedIsPause variable=============================================
