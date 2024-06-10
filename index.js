@@ -4,7 +4,7 @@ const port = process.env.PORT || 5000;
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
-// const stripe = require("stripe")(process.env.PAYMENT_KEY);
+const stripe = require("stripe")(process.env.PAYMENT_KEY);
 app.use(
   cors({
     origin: ["http://localhost:5173", "http://192.168.0.106:5173"],
@@ -65,6 +65,7 @@ async function run() {
     const userCollection = client.db("aph_family").collection("users");
     const petCollection = client.db("aph_family").collection("pets");
     const campaignCollection = client.db("aph_family").collection("campaigns");
+    const paymentCollection = client.db("aph_family").collection("payments");
     const adoptRequestCollection = client
       .db("aph_family")
       .collection("adoptRequests");
@@ -104,6 +105,18 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await campaignCollection.findOne(query);
+      res.send(result);
+    });
+    app.get("/adoptRequest/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await adoptRequestCollection.findOne(query);
+      res.send(result);
+    });
+    app.get("/payments/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await paymentCollection.findOne(query);
       res.send(result);
     });
 
@@ -159,7 +172,28 @@ async function run() {
       const result = await adoptRequestCollection.insertOne(pet);
       res.send(result);
     });
+    app.get("/adoptRequest", verifytoken, async (req, res) => {
+      const result = await adoptRequestCollection.find().toArray();
+      res.send(result);
+    });
 
+    app.patch("/adoptRequest/:id", verifytoken, async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updateAdoptStatus = req.body;
+      const item = {
+        $set: {
+          status: updateAdoptStatus.status,
+        },
+      };
+      const result = await adoptRequestCollection.updateOne(
+        filter,
+        item,
+        options
+      );
+      res.send(result);
+    });
     // ================================================campaign api here =========================================================
 
     app.post("/campaigns", verifytoken, async (req, res) => {
@@ -168,7 +202,10 @@ async function run() {
       res.send(result);
     });
     app.get("/campaigns", verifytoken, async (req, res) => {
-      const result = await campaignCollection.find().toArray();
+      const result = await campaignCollection
+        .find()
+        .sort({ lastDate: -1 })
+        .toArray();
       res.send(result);
     });
     //  ============================================= updatedIsPause variable=============================================
@@ -203,6 +240,43 @@ async function run() {
         },
       };
       const result = await campaignCollection.updateOne(filter, item, options);
+      res.send(result);
+    });
+
+    //======================================================== payment releted api here =====================================================
+
+    app.post("/create-payment-itent", async (req, res) => {
+      const { price } = req.body;
+      const amount = parseInt(price * 100);
+      // console.log(amount, "inside the intent");
+      if (!price || amount <= 0) return res.send({ clientSecret: null });
+      const { client_secret } = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+      res.send({
+        clientSecret: client_secret,
+      });
+    });
+
+    // send the payment info into the database
+    app.post("/payments", async (req, res) => {
+      const payment = req.body;
+      const paymentRes = await paymentCollection.insertOne(payment);
+      res.send(paymentRes);
+    });
+    // send the payment info into the database
+    app.get("/payments", verifytoken, async (req, res) => {
+      const paymentRes = await paymentCollection.find().toArray();
+      res.send(paymentRes);
+    });
+
+    // delete the payment info into the database
+    app.delete("/payments/:id", verifytoken, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await paymentCollection.deleteOne(query);
       res.send(result);
     });
 
